@@ -21,6 +21,15 @@ for _, gui in pairs(game.CoreGui:GetChildren()) do
     end
 end
 
+local function makeRigNonCollidable(rig)
+    if not rig then return end
+    for _, part in ipairs(rig:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+end
+
 -- Load rig from asset and parent to workspace
 local function loadRig()
     local success, models = pcall(function()
@@ -130,9 +139,29 @@ local function makePartsInvisible(rig)
     end
 end
 
--- Spike replacement tracking
-local loadedSpikes = {}
+local function getTargetRig()
+    -- First: ActorRig in workspace.Misc
+    local miscFolder = workspace:FindFirstChild("Misc")
+    if miscFolder then
+        for _, model in pairs(miscFolder:GetChildren()) do
+            if model:IsA("Model") and model.Name:find("ActorRig") then
+                return model, "ActorRig"
+            end
+        end
+    end
+    
+    -- Second: JohnDoe in Killers folder
+    local killerModel = workspace:FindFirstChild("Players")
+        and workspace.Players:FindFirstChild("Killers")
+        and workspace.Players.Killers:FindFirstChild(killerName)
+    if killerModel then
+        return killerModel, "JohnDoe"
+    end
+    
+    return nil, nil
+end
 
+local loadedSpikes = {}
 local MAX_SPIKES = 24 -- max spikes to load at once
 
 local customSpikeFolder = workspace:FindFirstChild("RochasCustomSpikes")
@@ -163,7 +192,7 @@ local function loadSpikeReplacement(originalSpike)
         newSpike.Name = "Spike"
         newSpike.Parent = customSpikeFolder
 
-        -- Initially position newSpike at original Spike's PrimaryPart CFrame
+        -- Position newSpike at original Spike's PrimaryPart CFrame
         if originalSpike.PrimaryPart and newSpike.PrimaryPart then
             newSpike:SetPrimaryPartCFrame(originalSpike.PrimaryPart.CFrame)
         else
@@ -191,52 +220,6 @@ local function loadSpikeReplacement(originalSpike)
     end
 end
 
-local function getAllParticleEmitters(parent)
-    local emitters = {}
-    for _, child in pairs(parent:GetDescendants()) do
-        if child:IsA("ParticleEmitter") then
-            table.insert(emitters, child)
-        end
-    end
-    return emitters
-end
-
-local maxTrails = 12
-local currentTrailCount = 0
-local trailInstance = nil
-
-local loadedTrail = nil
-
-local trailStorageFolder = workspace:FindFirstChild("CustomTrails")
-if not trailStorageFolder then
-    trailStorageFolder = Instance.new("Folder")
-    trailStorageFolder.Name = "CustomTrails"
-    trailStorageFolder.Parent = workspace
-end
-
-local function loadNewTrailOnce()
-    if loadedTrail and loadedTrail.Parent then
-        return loadedTrail
-    end
-
-    local success, models = pcall(function()
-        return game:GetObjects("rbxassetid://72925629825816")
-    end)
-    if success and models and #models > 0 then
-        local trailModel = models[1]
-        if trailModel:IsA("Folder") and #trailModel:GetChildren() > 0 then
-            trailModel = trailModel:GetChildren()[1]
-        end
-        trailModel.Name = "RochasTrail"
-        trailModel.Parent = trailStorageFolder
-        loadedTrail = trailModel
-        return loadedTrail
-    else
-        warn("Failed to load new trail model")
-        return nil
-    end
-end
-
 local function updateJohnDoeTrails()
     local killerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
@@ -246,8 +229,33 @@ local function updateJohnDoeTrails()
     local johnDoeTrailFolder = killerModel:FindFirstChild("JohnDoeTrail")
     if not johnDoeTrailFolder then return end
 
-    local newTrail = loadNewTrailOnce()
-    if not newTrail then return end
+    local loadedTrail = nil
+    local trailStorageFolder = workspace:FindFirstChild("CustomTrails")
+    if not trailStorageFolder then
+        trailStorageFolder = Instance.new("Folder")
+        trailStorageFolder.Name = "CustomTrails"
+        trailStorageFolder.Parent = workspace
+    end
+
+    if loadedTrail and loadedTrail.Parent then
+        -- already loaded
+    else
+        local success, models = pcall(function()
+            return game:GetObjects("rbxassetid://72925629825816")
+        end)
+        if success and models and #models > 0 then
+            local trailModel = models[1]
+            if trailModel:IsA("Folder") and #trailModel:GetChildren() > 0 then
+                trailModel = trailModel:GetChildren()[1]
+            end
+            trailModel.Name = "RochasTrail"
+            trailModel.Parent = trailStorageFolder
+            loadedTrail = trailModel
+        else
+            warn("Failed to load new trail model")
+            return
+        end
+    end
 
     for _, trailObj in pairs(johnDoeTrailFolder:GetChildren()) do
         if trailObj.Name == "Trail" and (trailObj:IsA("Folder") or trailObj:IsA("Instance")) then
@@ -260,7 +268,7 @@ local function updateJohnDoeTrails()
                 child:Destroy()
             end
 
-            for _, child in pairs(newTrail:GetChildren()) do
+            for _, child in pairs(loadedTrail:GetChildren()) do
                 child:Clone().Parent = trailObj
             end
         end
@@ -304,16 +312,26 @@ Button.Parent = Frame
 
 local rigInstance = nil
 local heartbeatConnection = nil
+local proxyRunning = false
 
 local function stopRochasProxy()
+    proxyRunning = false
     getgenv().RochasChangerRunning = false
     if heartbeatConnection then
         heartbeatConnection:Disconnect()
         heartbeatConnection = nil
     end
+
     if rigInstance then
         rigInstance:Destroy()
         rigInstance = nil
+    end
+
+    -- Destroy all Models named "Rig" in workspace
+    for _, model in pairs(workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name == "Rig" then
+            model:Destroy()
+        end
     end
 
     -- Reset JohnDoe visibility
@@ -323,9 +341,6 @@ local function stopRochasProxy()
     if killerModel then
         for _, part in pairs(killerModel:GetDescendants()) do
             if part:IsA("BasePart") then
-                if part.Name == Trail then
-                    return
-                end
                 part.Transparency = 0
                 part.CanCollide = true
             elseif part:IsA("Decal") or part:IsA("Texture") then
@@ -347,147 +362,264 @@ local function stopRochasProxy()
 end
 
 local function startRochasProxy()
-    local killerModel = workspace:FindFirstChild("Players")
-        and workspace.Players:FindFirstChild("Killers")
-        and workspace.Players.Killers:FindFirstChild(killerName)
-    repeat
-        task.wait(0)
-    until workspace:FindFirstChild("Players")
-        and workspace.Players:FindFirstChild("Killers")
-        and workspace.Players.Killers:FindFirstChild(killerName)
-    if not killerModel then
-        warn("Killer model not found")
-        StatusLabel.Text = "Status: Killer not found"
-        return
-    end
+    proxyRunning = true
+    StatusLabel.Text = "Status: Searching for rig..."
 
-    local torso = killerModel:FindFirstChild("Torso")
-    if not torso then
-        warn("Killer torso not found")
-        StatusLabel.Text = "Status: Torso missing"
-        return
-    end
+    local currentTargetType = nil
 
-    if torso.Color ~= torsoColor then
-        warn("Torso color mismatch")
-        StatusLabel.Text = "Status: Torso color mismatch"
-        return
-    end
-
-    local killerHumanoid = killerModel:FindFirstChildOfClass("Humanoid")
-    if not killerHumanoid then
-        warn("Killer humanoid missing")
-        StatusLabel.Text = "Status: No Humanoid"
-        return
-    end
-
-    -- Load rig and prep
-    local rig = loadRig()
-    if not rig then
-        StatusLabel.Text = "Status: Failed to load rig"
-        return
-    end
-
-    local rigHumanoid = rig:FindFirstChildOfClass("Humanoid")
-    if not rigHumanoid then
-        rig:Destroy()
-        StatusLabel.Text = "Status: Rig has no Humanoid"
-        return
-    end
-
-    setModelInvisible(killerModel)
-    setRigNonCollidable(rig)
-    makePartsInvisible(rig)
-
-    rigInstance = rig
-
-    StatusLabel.Text = "Status: Running"
-    Button.Text = "Stop Rochas Rig Proxy"
-
-    heartbeatConnection = RunService.Heartbeat:Connect(function()
-        if not getgenv().RochasChangerRunning then
-            stopRochasProxy()
-            return
+    while proxyRunning do
+        local targetModel, targetType = getTargetRig()
+        if not targetModel then
+            StatusLabel.Text = "Status: No target found"
+            for _, model in pairs(workspace:GetChildren()) do
+                if model:IsA("Model") and model.Name == "Rig" then
+                    model:Destroy()
+                end
+            end
+            wait(1)
+            continue
         end
 
-        rig:FindFirstChild("Humanoid").DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        -- Auto-switch priority if needed
+        if currentTargetType ~= targetType then
+            -- If currently proxying JohnDoe but ActorRig shows up, restart
+            if currentTargetType == "JohnDoe" and targetType == "ActorRig" then
+                StatusLabel.Text = "Status: ActorRig detected, restarting proxy..."
+                break -- break to restart proxy loop and prioritize ActorRig
+            end
+            -- If currently proxying ActorRig but no longer exists, restart to fallback
+            if currentTargetType == "ActorRig" and targetType ~= "ActorRig" then
+                StatusLabel.Text = "Status: ActorRig lost, restarting proxy..."
+                break
+            end
 
-        -- Sync rig position & yaw rotation to killer HRP
-        local killerHRP = killerModel:FindFirstChild("HumanoidRootPart")
-        local rigHRP = rig:FindFirstChild("HumanoidRootPart")
-        if killerHRP and rigHRP then
-            local pos = killerHRP.Position
-            local _, y, _ = killerHRP.CFrame:ToEulerAnglesYXZ() -- yaw only
-            rigHRP.CFrame = CFrame.new(pos) * CFrame.Angles(0, y, 0)
+            currentTargetType = targetType
         end
 
-        -- Dynamic animation syncing
-        updateRigAnimations(killerHumanoid, rigHumanoid)
-        updateJohnDoeTrails()
+        local killerHumanoid = targetModel:FindFirstChildOfClass("Humanoid")
+        if not killerHumanoid then
+            StatusLabel.Text = "Status: Target has no Humanoid"
+            wait(1)
+            continue
+        end
 
-        -- Spike replacement logic
-        local ingameMap = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
-        if ingameMap then
-            local spikeCount = 0
-            for _, spike in pairs(ingameMap:GetChildren()) do
-                if spike:IsA("Model") and spike.Name == "Spike" then
-                    if spikeCount >= MAX_SPIKES then
-                        break
+        if rigInstance then
+            rigInstance:Destroy()
+            rigInstance = nil
+        end
+        rigAnimTracks = {}
+        killerAnimIds = {}
+
+        local rig = loadRig()
+        if not rig then
+            StatusLabel.Text = "Status: Failed to load rig"
+            wait(1)
+            continue
+        end
+        local rigHumanoid = rig:FindFirstChildOfClass("Humanoid")
+        if not rigHumanoid then
+            rig:Destroy()
+            StatusLabel.Text = "Status: Rig has no Humanoid"
+            wait(1)
+            continue
+        end
+
+        setRigNonCollidable(rig)
+        makeRigNonCollidable(rig)
+        makePartsInvisible(rig)
+
+        local rochasRig = rig
+        game.Workspace.Rig.Torso.CanCollide = false
+
+        if rochasRig then
+            local head = rochasRig:FindFirstChild("Head")
+            if head and head:IsA("BasePart") then
+                head.Transparency = 1
+                local headz = head:FindFirstChild("Headz")
+                if headz and headz:IsA("BasePart") then
+                    headz.Transparency = 1
+                end
+            end
+
+            local leftArm = rochasRig:FindFirstChild("Left Arm")
+            if leftArm then
+                local cube001 = leftArm:FindFirstChild("Cube.001")
+                if cube001 and cube001:IsA("BasePart") then
+                    cube001.Transparency = 1
+                end
+                for _, part in ipairs(leftArm:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name == "Cube.001" then
+                        part.Transparency = 1
                     end
-
-                    -- Make original spike invisible
-                    setModelInvisible(spike)
-
-                    -- Load or get replacement spike
-                    local replacementSpike = loadSpikeReplacement(spike)
-                    if replacementSpike and spike.PrimaryPart and replacementSpike.PrimaryPart then
-                        -- Continuously sync replacement spike position to original spike position
-                        replacementSpike:SetPrimaryPartCFrame(spike.PrimaryPart.CFrame)
-                    end
-                    spikeCount = spikeCount + 1
                 end
             end
         end
-    end)
+
+        setModelInvisible(targetModel)
+
+        rigInstance = rig
+        StatusLabel.Text = "Status: Running (" .. targetType .. ")"
+        Button.Text = "Stop Rochas Rig Proxy"
+
+        -- Proxy loop for current target
+        while proxyRunning and targetModel and targetModel.Parent do
+            -- Detect if ActorRig priority changed mid-proxy
+            local newTargetModel, newTargetType = getTargetRig()
+            if newTargetType ~= targetType then
+                -- If ActorRig appears and current proxy is JohnDoe, break to restart proxy with ActorRig
+                if targetType == "JohnDoe" and newTargetType == "ActorRig" then
+                    StatusLabel.Text = "Status: ActorRig appeared, restarting proxy..."
+                    break
+                end
+                -- If ActorRig disappears and fallback needed, break to restart
+                if targetType == "ActorRig" and newTargetType ~= "ActorRig" then
+                    StatusLabel.Text = "Status: ActorRig lost, restarting proxy..."
+                    break
+                end
+            end
+
+            local targetHRP = targetModel:FindFirstChild("HumanoidRootPart")
+            local rigHRP = rig:FindFirstChild("HumanoidRootPart")
+            if targetHRP and rigHRP then
+                local pos = targetHRP.Position
+                local _, y, _ = targetHRP.CFrame:ToEulerAnglesYXZ()
+                rigHRP.CFrame = CFrame.new(pos) * CFrame.Angles(0, y, 0)
+            end
+
+            updateRigAnimations(killerHumanoid, rigHumanoid)
+            game.workspace.Players.Killers.JohnDoe.QueryHitbox.Transparency = 0.6
+            game.workspace.Players.Killers.JohnDoe.CollisionHitbox.Transparency = 0.6
+            game.workspace.Players.Killers.JohnDoe.CollisionHitbox.CanCollide = true
+            game.workspace.Players.Killers.JohnDoe.QueryHitbox.CanCollide = true
+            game.Workspace.Rig.Hat.CanCollide = false
+            game.Workspace.Rig.Head.CanCollide = false
+            game.Workspace.Rig.HumanoidRootPart.CanCollide = false
+            game.Workspace.Rig["Left Arm"].CanCollide = false
+            game.Workspace.Rig["Left Leg"].CanCollide = false
+            game.Workspace.Rig["Right Arm"].CanCollide = false
+            game.Workspace.Rig["Right Leg"].CanCollide = false
+            local rochasrigrn = game.Workspace:FindFirstChild("Rig")
+            rochasrigrn.Torso.CanCollide = false
+
+            if targetType == "JohnDoe" then
+                updateJohnDoeTrails()
+                local ingameMap = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
+                if ingameMap then
+                    local spikeCount = 0
+                    for _, spike in pairs(ingameMap:GetChildren()) do
+                        if spike:IsA("Model") and spike.Name == "Spike" then
+                            if spikeCount >= MAX_SPIKES then break end
+                            setModelInvisible(spike)
+                            local replacementSpike = loadSpikeReplacement(spike)
+                            if replacementSpike and spike.PrimaryPart and replacementSpike.PrimaryPart then
+                                replacementSpike:SetPrimaryPartCFrame(spike.PrimaryPart.CFrame)
+                            end
+                            spikeCount += 1
+                        end
+                    end
+                end
+            end
+
+            wait()
+        end
+    end
 end
 
 Button.MouseButton1Click:Connect(function()
-    if getgenv().RochasChangerRunning then
+    if proxyRunning then
         stopRochasProxy()
     else
         getgenv().RochasChangerRunning = true
-        startRochasProxy()
+        spawn(startRochasProxy)
     end
 end)
 
--- Intro text replacement loop (every frame) with GUI refresh
-task.spawn(function()
-    while getgenv().RochasChangerRunning do
-        task.wait(0) -- every frame
-
-        local gui = LocalPlayer:FindFirstChild("PlayerGui")
-        if gui then
-            local intro = gui:FindFirstChild("IntroScreen")
-            if intro and intro:FindFirstChild("Main") and intro.Main:FindFirstChild("Title") then
-                local textLabel = intro.Main.Title
-                if typeof(textLabel.Text) == "string" and textLabel.Text:find("I've always been here.") then
-                    -- Destroy and recreate the killer's GUI to refresh text
-                    intro.Main.Title:Destroy()
-
-                    -- Wait a tiny bit before recreating (to avoid race conditions)
-                    task.wait(0.05)
-
-                    local newTitle = Instance.new("TextLabel")
-                    newTitle.Name = "Title"
-                    newTitle.Size = UDim2.new(1, 0, 1, 0)
-                    newTitle.BackgroundTransparency = 1
-                    newTitle.TextColor3 = Color3.new(1, 1, 1)
-                    newTitle.Font = Enum.Font.SourceSansBold
-                    newTitle.TextSize = 24
-                    newTitle.Text = "SPREAD."
-                    newTitle.Parent = intro.Main
+-- Intro text replacement loop (runs in parallel)
+spawn(function()
+    while true do
+        if getgenv().RochasChangerRunning then
+            -- Replace intro text if needed
+            local gui = LocalPlayer:FindFirstChild("PlayerGui")
+            if gui then
+                local intro = gui:FindFirstChild("IntroScreen")
+                if intro and intro:FindFirstChild("Main") and intro.Main:FindFirstChild("Title") then
+                    local title = intro.Main.Title
+                    if typeof(title.Text) == "string" and title.Text == "I've always been here." then
+                        title.Text = "SPREAD."
+                    end
                 end
             end
         end
+
+        local hasActorRig = workspace:FindFirstChild("Misc") and (function()
+            for _, m in pairs(workspace.Misc:GetChildren()) do
+                if m.Name:find("ActorRig") then
+                    return true
+                end
+            end
+            return false
+        end)() or false
+
+        local johnDoeExists = workspace:FindFirstChild("Players") 
+            and workspace.Players:FindFirstChild("Killers") 
+            and workspace.Players.Killers:FindFirstChild(killerName)
+
+        if hasActorRig then
+            if game:GetService("Players").LocalPlayer.PlayerGui.IntroScreen.Main.Title.Text == "I've always been here." then
+                game:GetService("Players").LocalPlayer.PlayerGui.IntroScreen.Main.Title.Text = "SPREAD."
+            end
+            stopRochasProxy()
+            
+            -- Destroy all Models named "Rig" in workspace
+            for _, model in pairs(workspace:GetChildren()) do
+                if model:IsA("Model") and model.Name == "Rig" then
+                    model:Destroy()
+                end
+            end
+
+            wait(0.1) -- small delay before restarting
+            spawn(startRochasProxy)
+            
+            -- Wait until actor rig disappears
+            repeat
+                wait(0.1)
+                hasActorRig = workspace:FindFirstChild("Misc") and (function()
+                    for _, m in pairs(workspace.Misc:GetChildren()) do
+                        if m.Name:find("ActorRig") then
+                            return true
+                        end
+                    end
+                    return false
+                end)() or false
+            until not hasActorRig
+
+            stopRochasProxy()
+            
+            -- Destroy all Models named "Rig" in workspace again after stopping
+            for _, model in pairs(workspace:GetChildren()) do
+                if model:IsA("Model") and model.Name == "Rig" then
+                    model:Destroy()
+                end
+            end
+
+            wait(0.1)
+            spawn(startRochasProxy)
+        end
+
+        local killersFolder = workspace:FindFirstChild("Players") 
+            and workspace.Players:FindFirstChild("Killers")
+
+        if getgenv().RochasChangerRunning and killersFolder and #killersFolder:GetChildren() == 0 then
+            stopRochasProxy()
+            for _, model in pairs(workspace:GetChildren()) do
+                if model:IsA("Model") and model.Name == "Rig" then
+                    model:Destroy()
+                end
+            end
+            wait(0.1)
+            spawn(startRochasProxy)
+        end
+
+        wait(0) -- small delay before next check
     end
 end)
