@@ -350,6 +350,11 @@ local function startRochasProxy()
     local killerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
         and workspace.Players.Killers:FindFirstChild(killerName)
+    repeat
+        task.wait(0)
+    until workspace:FindFirstChild("Players")
+        and workspace.Players:FindFirstChild("Killers")
+        and workspace.Players.Killers:FindFirstChild(killerName)
     if not killerModel then
         warn("Killer model not found")
         StatusLabel.Text = "Status: Killer not found"
