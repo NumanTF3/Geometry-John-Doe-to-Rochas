@@ -8,10 +8,40 @@ getgenv().RochasChangerRunning = true
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local localCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+-- Update on respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    localCharacter = char
+end)
 
 local onlychangelocalplayerskin = false
-local characterName = "JohnDoe"
-local skinName = "GeometryJohnDoe" -- SkinName then  Killer name like Vanity Jason is VanityJason and geometry john doe will become GeometryJohnDoe and same for 1x1x1x1 like Diva1x1x1x1. for coolkidd its like MafiosoC00lkidd or Mafiosocoolkidd idk
+local characterName = {
+    "Jason",
+    "JohnDoe",
+    "c00lkidd",
+    "1x1x1x1",
+    "Noli",
+    "TwoTime",
+    "Noob",
+    "Guest1337",
+    "Elliot",
+    "Chance",
+    "Builderman",
+    "Dusekkar",
+    "007n7",
+    "Shedletsky",
+    "Taph"
+}
+local skinName = {
+    "GeometryJohnDoe",
+    "Milestone75Jason",
+    "MafiosoC00l",
+    "FriendElliot",
+    "YAAINoli",
+    "Diva1x1x1x1"
+    -- add more here
+} -- SkinName then  Killer name like Vanity Jason is VanityJason and geometry john doe will become GeometryJohnDoe and same for 1x1x1x1 like Diva1x1x1x1. for coolkidd its like MafiosoC00l
 local rigAssetId = "rbxassetid://74773737275811"
 local spikeAssetId = "rbxassetid://80855887476594"
 
@@ -140,6 +170,15 @@ local function makePartsInvisible(rig)
     end
 end
 
+local function contains(tbl, value)
+    for _, v in ipairs(tbl) do
+        if v == value then
+            return true
+        end
+    end
+    return false
+end
+
 local function getTargetRig()
     -- First: ActorRig in workspace.Misc
     local miscFolder = workspace:FindFirstChild("Misc")
@@ -156,11 +195,11 @@ local function getTargetRig()
         and workspace.Players:FindFirstChild("Killers")
         and workspace.Players.Killers:FindFirstChild(characterName)
 
-    if characterPlayerModel then
-        if characterPlayerModel:GetAttribute("SkinName") == skinName then
+    if characterPlayerModel and contains(characterName, characterPlayerModel.Name) then
+        if contains(skinName, characterPlayerModel:GetAttribute("SkinName")) then
             -- Check if only changing local player's skin
             if onlychangelocalplayerskin then
-                if characterPlayerModel.Name ~= game.Players.LocalPlayer.Name then
+                if characterPlayerModel ~= localCharacter then
                     -- Not the local player, skip
                     return nil
                 end
@@ -172,10 +211,10 @@ local function getTargetRig()
             and workspace.Players:FindFirstChild("Survivors")
             and workspace.Players.Survivors:FindFirstChild(characterName)
 
-        if characterPlayerModel and characterPlayerModel:GetAttribute("SkinName") == skinName then
+        if characterPlayerModel and contains(characterName, characterPlayerModel.Name) and contains(skinName, characterPlayerModel:GetAttribute("SkinName")) then
             -- Check if only changing local player's skin
             if onlychangelocalplayerskin then
-                if characterPlayerModel.Name ~= game.Players.LocalPlayer.Name then
+                if characterPlayerModel ~= localCharacter then
                     -- Not the local player, skip
                     return nil
                 end
