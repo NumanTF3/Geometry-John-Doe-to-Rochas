@@ -10,7 +10,6 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local killerName = "JohnDoe"
-local torsoColor = Color3.fromRGB(255, 174, 182)
 local rigAssetId = "rbxassetid://74773737275811"
 local spikeAssetId = "rbxassetid://80855887476594"
 
@@ -154,7 +153,7 @@ local function getTargetRig()
     local killerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
         and workspace.Players.Killers:FindFirstChild(killerName)
-    if killerModel then
+    if killerModel and killerModel:GetAttribute("SkinName") == "GeometryJohnDoe" then
         return killerModel, "JohnDoe"
     end
     
