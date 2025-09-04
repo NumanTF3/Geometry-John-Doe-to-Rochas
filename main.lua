@@ -9,7 +9,9 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
-local killerName = "JohnDoe"
+local onlychangelocalplayerskin = false
+local characterName = "JohnDoe"
+local skinName = "GeometryJohnDoe" -- SkinName then  Killer name like Vanity Jason is VanityJason and geometry john doe will become GeometryJohnDoe and same for 1x1x1x1 like Diva1x1x1x1. for coolkidd its like MafiosoC00lkidd or Mafiosocoolkidd idk
 local rigAssetId = "rbxassetid://74773737275811"
 local spikeAssetId = "rbxassetid://80855887476594"
 
@@ -150,11 +152,36 @@ local function getTargetRig()
     end
     
     -- Second: JohnDoe in Killers folder
-    local killerModel = workspace:FindFirstChild("Players")
+    local characterPlayerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
-        and workspace.Players.Killers:FindFirstChild(killerName)
-    if killerModel and killerModel:GetAttribute("SkinName") == "GeometryJohnDoe" then
-        return killerModel, "JohnDoe"
+        and workspace.Players.Killers:FindFirstChild(characterName)
+
+    if characterPlayerModel then
+        if characterPlayerModel:GetAttribute("SkinName") == skinName then
+            -- Check if only changing local player's skin
+            if onlychangelocalplayerskin then
+                if characterPlayerModel.Name ~= game.Players.LocalPlayer.Name then
+                    -- Not the local player, skip
+                    return nil
+                end
+            end
+            return characterPlayerModel, characterName
+        end
+    else
+        characterPlayerModel = workspace:FindFirstChild("Players")
+            and workspace.Players:FindFirstChild("Survivors")
+            and workspace.Players.Survivors:FindFirstChild(characterName)
+
+        if characterPlayerModel and characterPlayerModel:GetAttribute("SkinName") == skinName then
+            -- Check if only changing local player's skin
+            if onlychangelocalplayerskin then
+                if characterPlayerModel.Name ~= game.Players.LocalPlayer.Name then
+                    -- Not the local player, skip
+                    return nil
+                end
+            end
+            return characterPlayerModel, characterName
+        end
     end
     
     return nil, nil
@@ -220,12 +247,12 @@ local function loadSpikeReplacement(originalSpike)
 end
 
 local function updateJohnDoeTrails()
-    local killerModel = workspace:FindFirstChild("Players")
+    local characterPlayerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
-        and workspace.Players.Killers:FindFirstChild(killerName)
-    if not killerModel then return end
+        and workspace.Players.Killers:FindFirstChild(characterName)
+    if not characterPlayerModel then return end
 
-    local johnDoeTrailFolder = killerModel:FindFirstChild("JohnDoeTrail")
+    local johnDoeTrailFolder = characterPlayerModel:FindFirstChild("JohnDoeTrail")
     if not johnDoeTrailFolder then return end
 
     local loadedTrail = nil
@@ -334,11 +361,11 @@ local function stopRochasProxy()
     end
 
     -- Reset JohnDoe visibility
-    local killerModel = workspace:FindFirstChild("Players")
+    local characterPlayerModel = workspace:FindFirstChild("Players")
         and workspace.Players:FindFirstChild("Killers")
-        and workspace.Players.Killers:FindFirstChild(killerName)
-    if killerModel then
-        for _, part in pairs(killerModel:GetDescendants()) do
+        and workspace.Players.Killers:FindFirstChild(characterName)
+    if characterPlayerModel then
+        for _, part in pairs(characterPlayerModel:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.Transparency = 0
                 part.CanCollide = true
@@ -561,7 +588,7 @@ spawn(function()
 
         local johnDoeExists = workspace:FindFirstChild("Players") 
             and workspace.Players:FindFirstChild("Killers") 
-            and workspace.Players.Killers:FindFirstChild(killerName)
+            and workspace.Players.Killers:FindFirstChild(characterName)
 
         if hasActorRig then
             if game:GetService("Players").LocalPlayer.PlayerGui.IntroScreen.Main.Title.Text == "I've always been here." then
