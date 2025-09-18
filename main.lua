@@ -35,11 +35,6 @@ local characterName = {
 }
 local skinName = {
     "GeometryJohnDoe",
-    "Milestone75Jason",
-    "MafiosoC00l",
-    "FriendElliot",
-    "YAAINoli",
-    "Diva1x1x1x1"
     -- add more here
 } -- SkinName then  Killer name like Vanity Jason is VanityJason and geometry john doe will become GeometryJohnDoe and same for 1x1x1x1 like Diva1x1x1x1. for coolkidd its like MafiosoC00l
 local rigAssetId = "rbxassetid://74773737275811"
