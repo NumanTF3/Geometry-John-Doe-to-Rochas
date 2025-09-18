@@ -17,7 +17,7 @@ end)
 
 local onlychangelocalplayerskin = false
 local characterName = {
-    "Jason",
+    "Slasher",
     "JohnDoe",
     "c00lkidd",
     "1x1x1x1",
